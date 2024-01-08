@@ -10,6 +10,7 @@
 #include <esp_heap_caps.h>
 #include <esp_log.h>
 #include <esp_timer.h>
+#include "esp32/himem.h"
 
 #ifndef _swap_int
 #define _swap_int(a, b)                                                        \
@@ -34,12 +35,39 @@ EpdiyHighlevelState epd_hl_init(const EpdWaveform* waveform) {
     ESP_LOGW("EPDiy", "Please enable PSRAM for the ESP32 (menuconfig→ Component config→ ESP32-specific)");
   #endif
   EpdiyHighlevelState state;
+#if defined(EPDIY_USE_HIMEM)
+  int alloc_aligned_size = ((fb_size / ESP_HIMEM_BLKSZ) + 1) * ESP_HIMEM_BLKSZ;
+  size_t memcnt = esp_himem_get_phys_size();
+  size_t memfree = esp_himem_get_free_size();
+  printf("Himem has %dKiB of memory, %dKiB of which is free, spram free %dKiB. fb_size=0x%x, alloc_aligned_size=0x%x\n", 
+    (int)memcnt/1024, (int)memfree/1024, heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024, 
+    fb_size, alloc_aligned_size);
+  // Allocate the memory
+  ESP_ERROR_CHECK(esp_himem_alloc(alloc_aligned_size * 2 + ESP_HIMEM_BLKSZ * 4, &state.mh));
+  // Allocate a block of address range
+  ESP_ERROR_CHECK(esp_himem_alloc_map_range(alloc_aligned_size * 2 + ESP_HIMEM_BLKSZ * 4, &state.rh));
+  ESP_ERROR_CHECK(esp_himem_map(state.mh, state.rh, 0 * alloc_aligned_size, 0, alloc_aligned_size, 0, (void**)&state.back_fb));
+  assert(state.back_fb != NULL);
+  ESP_ERROR_CHECK(esp_himem_map(state.mh, state.rh, 1 * alloc_aligned_size, alloc_aligned_size, alloc_aligned_size, 0, (void**)&state.front_fb));
+  assert(state.front_fb != NULL);
+  memfree = esp_himem_get_free_size();
+  printf("After back & front fb allocation, Himem has %dKiB free, heap spram free %dKiB\n", 
+    (int)memfree/1024, heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024);
+  state.difference_fb = heap_caps_malloc(2 * fb_size, MALLOC_CAP_SPIRAM);
+  assert(state.difference_fb != NULL);
+  memfree = esp_himem_get_free_size();
+  printf("After all fb allocation, Himem has %dKiB free, heap spram free %dKiB\n", 
+    (int)memfree/1024, heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024);
+  heap_caps_print_heap_info(MALLOC_CAP_SPIRAM);
+#else
   state.back_fb = heap_caps_malloc(fb_size, MALLOC_CAP_SPIRAM);
   assert(state.back_fb != NULL);
   state.front_fb = heap_caps_malloc(fb_size, MALLOC_CAP_SPIRAM);
   assert(state.front_fb != NULL);
   state.difference_fb = heap_caps_malloc(2 * fb_size, MALLOC_CAP_SPIRAM);
   assert(state.difference_fb != NULL);
+#endif
+
   state.dirty_lines = malloc(epd_height() * sizeof(bool));
   assert(state.dirty_lines != NULL);
   state.waveform = waveform;
@@ -180,6 +208,9 @@ void epd_fullclear(EpdiyHighlevelState* state, int temperature) {
   assert(state != NULL);
   epd_hl_set_all_white(state);
   enum EpdDrawError err = epd_hl_update_screen(state, MODE_GC16, temperature);
+  if (err != EPD_DRAW_SUCCESS) {
+    ESP_LOGE("epdiy", "draw error: %X", err);
+  }
   assert(err == EPD_DRAW_SUCCESS);
   epd_clear();
 }

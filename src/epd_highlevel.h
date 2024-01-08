@@ -80,6 +80,10 @@ typedef struct {
   bool* dirty_lines;
   /// The waveform information to use.
   const EpdWaveform* waveform;
+  /// HiMem handler
+  esp_himem_handle_t mh;
+  /// Handle for the actual RAM
+  esp_himem_rangehandle_t rh;
 } EpdiyHighlevelState;
 
 

@@ -14,6 +14,8 @@ extern "C" {
 
 #include "epd_internals.h"
 
+#include "esp32/himem.h"
+
 /// An area on the display.
 typedef struct {
   /// Horizontal position.
