@@ -1,5 +1,6 @@
 #!python3
 import sys
+import os
 
 # inclusive unicode code point intervals
 # must not overlap and be in ascending order
@@ -47,6 +48,8 @@ parser = argparse.ArgumentParser(description="Generate a header file from a font
 parser.add_argument("name", action="store", help="name of the font.")
 parser.add_argument("size", type=int, help="font size to use.")
 parser.add_argument("fontstack", action="store", nargs='+', help="list of font files, ordered by descending priority. This is not actually implemented please just use one file for now.")
+parser.add_argument("filename", action="store", help="name of the output header+source.")
+parser.add_argument("--path", action="store", help="path to the output header+source.")
 parser.add_argument("--compress", dest="compress", action="store_true", help="compress glyph bitmaps.")
 parser.add_argument("--additional-intervals", dest="additional_intervals", action="append", help="Additional code point intervals to export as min,max. This argument can be repeated.")
 parser.add_argument("--string", action="store", help="A string of all required characters. intervals are made up of this" )
@@ -239,61 +242,74 @@ for index, glyph in enumerate(all_glyphs):
     props, compressed = glyph
     glyph_data.extend([b for b in compressed])
     glyph_props.append(props)
+
+header = open(os.path.join(args.path, args.filename + '.h'), "w")
+source = open(os.path.join(args.path, args.filename + '.c'), "w")
+
 print("", file=sys.stderr)
 print(f"Original font file {font_file} as {font_name} using {total_chars} characters", file=sys.stderr)
 
 print("total", total_packed, file=sys.stderr)
 print("compressed", total_size, file=sys.stderr)
 
-print("#pragma once")
-print("#include \"epdiy.h\"")
+header_name = f"__{args.filename.upper()}_H__"
+source.write("#include \"epdiy.h\"" + "\n")
+source.write(f"#include \"{args.filename}.h\"" + "\n")
 
 # add font file origin and characters at the head of the output file
-print("/*")
-print ( "Created with")
-print(command_line)
-print(f"As '{font_name}' with available {total_chars} characters")
+source.write("/*" + "\n")
+source.write ( "Created with")
+source.write(command_line + "\n")
+source.write(f"As '{font_name}' with available {total_chars} characters" + "\n")
 for i, g in enumerate(glyph_props):
-    print (f"{chr(g.code_point)}", end ="" )
-print("")
-print("*/")
+    source.write(f"{chr(g.code_point)}")
+source.write("" + "\n")
+source.write("*/" + "\n")
 
-print(f"const uint8_t {font_name}_Bitmaps[{len(glyph_data)}] = {{")
+source.write(f"const uint8_t {font_name}_Bitmaps[{len(glyph_data)}] = {{" + "\n")
 for c in chunks(glyph_data, 16):
-    print ("    " + " ".join(f"0x{b:02X}," for b in c))
-print ("};");
+    source.write ("    " + " ".join(f"0x{b:02X}," for b in c) + "\n")
+source.write ("};\n");
 
 
-print ('// GlyphProps[width, height, advance_x, left, top, compressed_size, data_offset, code_point]')
-print(f"const EpdGlyph {font_name}_Glyphs[] = {{")
+source.write ('// GlyphProps[width, height, advance_x, left, top, compressed_size, data_offset, code_point]' + "\n")
+source.write(f"const EpdGlyph {font_name}_Glyphs[] = {{" + "\n")
 for i, g in enumerate(glyph_props):
-    print ("    { " + ", ".join([f"{a}" for a in list(g[:-1])]),"},", f"// '{chr(g.code_point) if g.code_point != 92 else '<backslash>'}'")
-print ("};");
+    source.write ("    { " + ", ".join([f"{a}" for a in list(g[:-1])]) + " }, " + f"// '{chr(g.code_point) if g.code_point != 92 else '<backslash>'}'" + "\n")
+source.write ("};\n");
 
-print(f"const EpdUnicodeInterval {font_name}_Intervals[] = {{")
+source.write(f"const EpdUnicodeInterval {font_name}_Intervals[] = {{" + "\n")
 offset = 0
 for i_start, i_end in intervals:
-    print (f"    {{ 0x{i_start:X}, 0x{i_end:X}, 0x{offset:X} }},")
+    source.write (f"    {{ 0x{i_start:X}, 0x{i_end:X}, 0x{offset:X} }}," + "\n")
     offset += i_end - i_start + 1
-print ("};");
+source.write ("};\n");
 
-print(f"const EpdFont {font_name} = {{")
-print(f"    {font_name}_Bitmaps, // (*bitmap) Glyph bitmap pointer, all concatenated together")
-print(f"    {font_name}_Glyphs, // glyphs Glyph array")
-print(f"    {font_name}_Intervals, // intervals Valid unicode intervals for this font")
-print(f"    {len(intervals)},   // interval_count Number of unicode intervals.intervals")
-print(f"    {1 if compress else 0}, // compressed Does this font use compressed glyph bitmaps?")
-print(f"    {norm_ceil(f_height)}, // advance_y Newline distance (y axis)")
-print(f"    {norm_ceil(ascender)}, // ascender Maximal height of a glyph above the base line")
-print(f"    {norm_floor(descender)}, // descender Maximal height of a glyph below the base line")
-print("};")
-print("/*")
-print("Included intervals")
+source.write(f"const EpdFont {font_name} = {{" + "\n")
+source.write(f"    {font_name}_Bitmaps, // (*bitmap) Glyph bitmap pointer, all concatenated together" + "\n")
+source.write(f"    {font_name}_Glyphs, // glyphs Glyph array" + "\n")
+source.write(f"    {font_name}_Intervals, // intervals Valid unicode intervals for this font" + "\n")
+source.write(f"    {len(intervals)},   // interval_count Number of unicode intervals.intervals" + "\n")
+source.write(f"    {1 if compress else 0}, // compressed Does this font use compressed glyph bitmaps?" + "\n")
+source.write(f"    {norm_ceil(f_height)}, // advance_y Newline distance (y axis)" + "\n")
+source.write(f"    {norm_ceil(ascender)}, // ascender Maximal height of a glyph above the base line" + "\n")
+source.write(f"    {norm_floor(descender)}, // descender Maximal height of a glyph below the base line" + "\n")
+source.write("};" + "\n")
+source.write("/*" + "\n")
+source.write("Included intervals" + "\n")
 for i_start, i_end in intervals:
-    print (f"    ( {i_start}, {i_end}), ie. '{chr(i_start)}' -  '{chr(i_end)}'")
+    source.write (f"    ( {i_start}, {i_end}), ie. '{chr(i_start)}' -  '{chr(i_end)}'\n")
 print("Included intervals", file=sys.stderr)
 for i_start, i_end in intervals:
     print (f"    ( {i_start}, {i_end}), ie. '{chr(i_start)}' -  '{chr(i_end)}'", file=sys.stderr)
-print("")
-print("*/")
+source.write("" + "\n")
+source.write("*/" + "\n")
 
+source.close()
+
+header.write(f"#ifndef {header_name}\n")
+header.write(f"#define {header_name}\n")
+header.write(f"#include \"epdiy.h\"\n")
+header.write(f"extern const EpdFont {font_name};\n")
+header.write(f"#endif // {header_name}\n")
+header.close()
