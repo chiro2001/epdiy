@@ -428,20 +428,20 @@ int epd_rotated_display_height() {
 uint8_t epd_get_pixel(int x, int y, int fb_width, int fb_height, const uint8_t *framebuffer) {
   if (x < 0 || x >= fb_width) {
    return 0;
- }
- if (y < 0 || y >= fb_height) {
-   return 0;
- }
- int fb_width_bytes = fb_width / 2 + fb_width % 2;
- uint8_t buf_val = framebuffer[y * fb_width_bytes + x / 2];
- if (x % 2) {
-   buf_val = (buf_val & 0xF0) >> 4;
- } else {
-   buf_val = (buf_val & 0x0F);
- }
+  }
+  if (y < 0 || y >= fb_height) {
+    return 0;
+  }
+  int fb_width_bytes = fb_width / 2 + fb_width % 2;
+  uint8_t buf_val = framebuffer[y * fb_width_bytes + x / 2];
+  if (x % 2) {
+    buf_val = (buf_val & 0xF0) >> 4;
+  } else {
+    buf_val = (buf_val & 0x0F);
+  }
 
- // epd_draw_pixel needs a 0 -> 255 value
- return buf_val<<4;
+  // epd_draw_pixel needs a 0 -> 255 value
+  return buf_val<<4;
 }
 
 static void draw_rotated_transparent_image(EpdRect image_area, const uint8_t *image_buffer, uint8_t *framebuffer, uint8_t *transparent_color) {

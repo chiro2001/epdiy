@@ -112,6 +112,13 @@ static int uncompress(uint8_t *dest, size_t uncompressed_size, const uint8_t *so
     return 0;
 }
 
+void generate_color_lut(uint8_t *color_lut, uint8_t fg_color, uint8_t bg_color) {
+  for (int c = 0; c < 16; c++) {
+    int color_difference = (int)fg_color - (int)bg_color;
+    color_lut[c] = max(0, min(15, bg_color + c * color_difference / 15));
+  }
+}
+
 /*!
    @brief   Draw a single character to a pre-allocated buffer.
 */
@@ -151,11 +158,11 @@ static enum EpdDrawError IRAM_ATTR draw_char(const EpdFont *font, uint8_t *buffe
   }
 
   uint8_t color_lut[16];
-  for (int c = 0; c < 16; c++) {
-    int color_difference = (int)props->fg_color - (int)props->bg_color;
-    color_lut[c] = max(0, min(15, props->bg_color + c * color_difference / 15));
-  }
   bool background_needed = props->flags & EPD_DRAW_BACKGROUND;
+  bool bg_inv_needed = props->flags & EPD_INV_BACKGROUND;
+  if (!bg_inv_needed) {
+    generate_color_lut(color_lut, props->fg_color, props->bg_color);
+  }
 
   for (int y = 0; y < height; y++) {
     int yy = cursor_y - glyph->top + y;
@@ -173,8 +180,15 @@ static enum EpdDrawError IRAM_ATTR draw_char(const EpdFont *font, uint8_t *buffe
         bm = bm >> 4;
       }
       if (background_needed || bm) {
+        if (bg_inv_needed) {
+          // must be global frame buffer size
+          uint8_t pixel_color = epd_get_pixel(xx, yy, epd_width(), epd_height(), buffer);
+          color = (0xf - (pixel_color >> 4)) << 4;
+          epd_draw_pixel(xx, yy, color, buffer);
+        } else {
           color = color_lut[bm] << 4;
           epd_draw_pixel(xx, yy, color, buffer);
+        }
       }
       byte_complete = !byte_complete;
       x++;

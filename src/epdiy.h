@@ -180,6 +180,9 @@ enum EpdFontFlags {
   EPD_DRAW_ALIGN_RIGHT = 0x4,
   /// Center-align lines
   EPD_DRAW_ALIGN_CENTER = 0x8,
+
+  /// Draw fg as inversed background
+  EPD_INV_BACKGROUND = 0x10,
 };
 
 /// Font properties.
