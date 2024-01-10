@@ -183,6 +183,7 @@ enum EpdFontFlags {
 
   /// Draw fg as inversed background
   EPD_INV_BACKGROUND = 0x10,
+  EPD_INV_BACKGROUND_BIN = 0x20,
 };
 
 /// Font properties.
@@ -195,6 +196,8 @@ typedef struct {
   uint32_t fallback_glyph;
   /// Additional flags, reserved for future use
   enum EpdFontFlags flags;
+  /// Target background fb
+  uint8_t *bg;
 } EpdFontProperties;
 
 #include "epd_board.h"

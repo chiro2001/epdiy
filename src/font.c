@@ -159,7 +159,7 @@ static enum EpdDrawError IRAM_ATTR draw_char(const EpdFont *font, uint8_t *buffe
 
   uint8_t color_lut[16];
   bool background_needed = props->flags & EPD_DRAW_BACKGROUND;
-  bool bg_inv_needed = props->flags & EPD_INV_BACKGROUND;
+  bool bg_inv_needed = props->flags & (EPD_INV_BACKGROUND | EPD_INV_BACKGROUND_BIN);
   if (!bg_inv_needed) {
     generate_color_lut(color_lut, props->fg_color, props->bg_color);
   }
@@ -179,13 +179,25 @@ static enum EpdDrawError IRAM_ATTR draw_char(const EpdFont *font, uint8_t *buffe
       } else {
         bm = bm >> 4;
       }
-      if (background_needed || bm) {
-        if (bg_inv_needed) {
-          // must be global frame buffer size
-          uint8_t pixel_color = epd_get_pixel(xx, yy, epd_width(), epd_height(), buffer);
-          color = (0xf - (pixel_color >> 4)) << 4;
-          epd_draw_pixel(xx, yy, color, buffer);
+      if (bg_inv_needed) {
+        // must be global frame buffer size
+        uint8_t pixel_color = epd_get_pixel(xx, yy, epd_width(), epd_height(), props->bg);
+        if (props->flags & EPD_INV_BACKGROUND_BIN) {
+          if (bm) {
+            if (pixel_color > 0x80) {
+              color = 0x00;
+            } else {
+              color = 0xf0;
+            }
+          } else {
+            color = pixel_color;
+          }
         } else {
+          color = (0xf - (pixel_color >> 4)) << 4;
+        }
+        epd_draw_pixel(xx, yy, color, buffer);
+      } else {
+        if (background_needed || bm) {
           color = color_lut[bm] << 4;
           epd_draw_pixel(xx, yy, color, buffer);
         }
